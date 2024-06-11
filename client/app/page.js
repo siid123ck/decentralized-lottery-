@@ -5,6 +5,8 @@ import Header from './components/Header';
 import LotteryEntry from './components/LotteryEntry';
 import WinnerDisplay from './components/WinnerDisplay';
 import lotteryABI from '../abis/DecentralizedLottery.json'
+import HowItWorks from './components/HowItWorks';
+import WhyChooseUs from './components/WhyChooseUs';
 
 const Home = () => {
   const [winner, setWinner] = useState('');
@@ -12,7 +14,7 @@ const Home = () => {
   const fetchLatestWinner = async () => {
     if (window.ethereum) { 
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const contract = new ethers.Contract('<LOTTERY_CONTRACT_ADDRESS>', lotteryABI, provider);
+      const contract = new ethers.Contract('0x2ed37245EE68B74ADc9b04b65A8B76Fc28ea2355', lotteryABI, provider);
       const latestWinner = await contract.latestWinner();
       setWinner(latestWinner);
     }
@@ -24,12 +26,11 @@ const Home = () => {
 
   return (
     <div>
-      <Header />
-      <main className="container mx-auto p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <main className=" mx-auto p-4">
           <LotteryEntry onEnter={fetchLatestWinner} />
-          <WinnerDisplay winner={winner} />
-        </div>
+          {/* <WinnerDisplay winner={winner} /> */}
+          <HowItWorks />
+          <WhyChooseUs />
       </main>
     </div>
   );

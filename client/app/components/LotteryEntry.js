@@ -23,22 +23,25 @@ const LotteryEntry = ({ onEnter }) => {
   };
 
   return (
-    <div className="p-4 bg-gray-800 text-white rounded-lg">
-      <h2 className="text-xl mb-4">Enter the Lottery</h2>
+    <div className="flex justify-center items-center p-8 bg-gray-50">
+    <div className="w-full max-w-md p-8 bg-white shadow-lg rounded-lg">
+      <h2 className="text-2xl font-bold text-purple-900 mb-4">Enter the Lottery</h2>
       <input
         type="text"
-        className="w-full p-2 mb-4 text-black"
-        placeholder="Amount in ETH"
+        className="w-full p-2 mb-4 border border-gray-300 rounded text-black"
+        placeholder="Enter 0.1 ETH fee"
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
+        readOnly
       />
       <button
-        className="w-full p-2 bg-blue-500 hover:bg-blue-700 rounded"
+        className="w-full p-2 bg-purple-600 text-white font-bold rounded hover:bg-purple-800"
         onClick={enterLottery}
       >
-        Enter
+        Enter Lottery
       </button>
     </div>
+  </div>
   );
 };
 
