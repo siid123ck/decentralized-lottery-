@@ -1,9 +1,7 @@
 "use client"
 import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
-import Header from './components/Header';
 import LotteryEntry from './components/LotteryEntry';
-import WinnerDisplay from './components/WinnerDisplay';
 import lotteryABI from '../abis/DecentralizedLottery.json'
 import HowItWorks from './components/HowItWorks';
 import WhyChooseUs from './components/WhyChooseUs';
