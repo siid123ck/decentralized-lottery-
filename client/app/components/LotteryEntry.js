@@ -1,22 +1,32 @@
 "use client"
 import { useState } from 'react';
 import { ethers } from 'ethers';
+import lotteryABI from '../../abis/DecentralizedLottery.json'
 
 const LotteryEntry = ({ onEnter }) => {
   const [amount, setAmount] = useState('');
 
+
   const enterLottery = async () => {
     if (window.ethereum) {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      const signer = provider.getSigner();
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        console.log(signer)
 
-      const tx = await signer.sendTransaction({
-        to: '<LOTTERY_CONTRACT_ADDRESS>',
-        value: ethers.parseEther(amount)
-      });
-      await tx.wait();
-      onEnter();
+        const contract = new ethers.Contract("0x2ed37245EE68B74ADc9b04b65A8B76Fc28ea2355", 
+        lotteryABI, signer);
+
+        const tx = await contract.enterLottery({
+          value: ethers.parseEther(amount),
+          gasLimit:210000,
+        });
+
+        await tx.wait();
+        onEnter();
+      } catch (error) {
+        console.error('Error entering lottery:', error);
+      }
     } else {
       alert("Please install MetaMask!");
     }
@@ -32,7 +42,6 @@ const LotteryEntry = ({ onEnter }) => {
         placeholder="Enter 0.1 ETH fee"
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
-        readOnly
       />
       <button
         className="w-full p-2 bg-purple-600 text-white font-bold rounded hover:bg-purple-800"
