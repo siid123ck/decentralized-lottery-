@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "./RandomConsumer.sol";
+import {AutomationCompatibleInterface} from "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
+import "./randomConsumer.sol";
 
-contract DecentralizedLottery {
+contract DecentralizedLottery is AutomationCompatibleInterface {
     address public owner;
     address[] public participants;
     uint256 public lotteryEndTime;
-    uint256 public  requestId;
-    uint256 public  duration;
+    uint256 public requestId;
+    uint256 public duration;
     address public winner;
+    address[] public winners;
     RandomNumberConsumer public randomNumberConsumer;
 
     event LotteryEntered(address indexed participant);
@@ -26,10 +28,6 @@ contract DecentralizedLottery {
         require(msg.sender == owner, "Not the owner");
         _;
     }
-     modifier onlyKeeper() {
-        require(msg.sender == address(this), "Only Chainlink Keepers can call this function");
-        _;
-    }
 
     function enterLottery() public payable {
         require(block.timestamp < lotteryEndTime, "Lottery has ended");
@@ -39,37 +37,38 @@ contract DecentralizedLottery {
         emit LotteryEntered(msg.sender);
     }
 
-    function endLottery() public onlyKeeper {
+    function endLottery() internal {
         require(block.timestamp >= lotteryEndTime, "Lottery still ongoing");
         require(participants.length > 0, "No participants");
 
         requestId = randomNumberConsumer.requestRandomWords();
     }
 
-    function selectWinner() public onlyKeeper {
-        (, bool fulfilled, uint256[] memory randomWords) = randomNumberConsumer.getRequestStatus(requestId);
+    function selectWinner() internal {
+        (,bool fulfilled, uint256[] memory randomWords) = randomNumberConsumer.getRequestStatus(requestId);
         require(fulfilled, "Random number not fulfilled yet");
 
         uint256 winnerIndex = randomWords[0] % participants.length;
-         winner = participants[winnerIndex];
+        winner = participants[winnerIndex];
 
         payable(winner).transfer(address(this).balance);
+        winners.push(winner);
         emit WinnerSelected(winner);
 
         // Reset the lottery for the next round
         participants = new address[](0) ;
-        lotteryEndTime = block.timestamp + duration; 
-    } 
-
-        // Chainlink Keepers functions
-    function checkUpkeep(bytes calldata checkData ) external view  returns (bool upkeepNeeded, bytes memory  performData ) {
-        upkeepNeeded = (block.timestamp >= lotteryEndTime && participants.length > 0);
-        performData = checkData;
+        lotteryEndTime = block.timestamp + duration;
     }
 
-    function performUpkeep(bytes calldata /* performData */) external  {
+    // Chainlink Keepers functions
+    function checkUpkeep(bytes calldata /* checkData */) external view override returns (bool upkeepNeeded, bytes memory /* performData */) {
+        upkeepNeeded = (block.timestamp >= lotteryEndTime && participants.length > 0);
+    }
+
+    function performUpkeep(bytes calldata /* performData */) external override {
+        if (block.timestamp >= lotteryEndTime && participants.length > 0) {
             endLottery();
             selectWinner();
-        
+        }
     }
 }

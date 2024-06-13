@@ -1,10 +1,13 @@
 "use client"
 import { useState } from 'react';
 import { ethers } from 'ethers';
-import lotteryABI from '../../abis/DecentralizedLottery.json'
+import lotteryABI from '../../abis/DecentralizedLottery.json';
 
-const LotteryEntry = ({ onEnter }) => {
+const LotteryEntry = () => {
   const [amount, setAmount] = useState('');
+  const [message, setMessage] = useState('');
+
+  const contractAddress = process.env.NEXT_PUBLIC_LOTTO_CONTRACT_ADDRESS;
 
 
   const enterLottery = async () => {
@@ -12,9 +15,8 @@ const LotteryEntry = ({ onEnter }) => {
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
-        console.log(signer)
 
-        const contract = new ethers.Contract("0x2ed37245EE68B74ADc9b04b65A8B76Fc28ea2355", 
+        const contract = new ethers.Contract(contractAddress, 
         lotteryABI, signer);
 
         const tx = await contract.enterLottery({
@@ -23,9 +25,11 @@ const LotteryEntry = ({ onEnter }) => {
         });
 
         await tx.wait();
-        onEnter();
+        setMessage('You have successfully entered the lottery. Please wait for the draw of the winner.');
+
       } catch (error) {
         console.error('Error entering lottery:', error);
+        setMessage('There was an error entering the lottery. Please try again.');
       }
     } else {
       alert("Please install MetaMask!");
@@ -49,6 +53,9 @@ const LotteryEntry = ({ onEnter }) => {
       >
         Enter Lottery
       </button>
+      {message && (
+          <p className="mt-4 text-center text-green-600">{message}</p>
+        )}
     </div>
   </div>
   );
