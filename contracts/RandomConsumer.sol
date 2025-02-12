@@ -1,109 +1,95 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.19;
 
-import {ConfirmedOwner} from "@chainlink/contracts@1.1.1/src/v0.8/shared/access/ConfirmedOwner.sol";
-import {VRFV2WrapperConsumerBase} from "@chainlink/contracts@1.1.1/src/v0.8/vrf/VRFV2WrapperConsumerBase.sol";
-import {LinkTokenInterface} from "@chainlink/contracts@1.1.1/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
+import {VRFConsumerBaseV2Plus} from "@chainlink/contracts@1.3.0/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {VRFV2PlusClient} from "@chainlink/contracts@1.3.0/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+
+contract LotteryVRF is VRFConsumerBaseV2Plus {
+    uint256 private constant WINNER_PENDING = 42;
+    address public lastWinner;
+    uint256 public lastRandomNumber;
 
 
+    uint256 public s_subscriptionId;
+    address public vrfCoordinator = 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B;
 
-contract RandomNumberConsumer is
-    VRFV2WrapperConsumerBase,
-    ConfirmedOwner
-{
-    event RequestSent(uint256 requestId, uint32 numWords);
-    event RequestFulfilled(
-        uint256 requestId,
-        uint256[] randomWords,
-        uint256 payment
-    );
+    bytes32 public s_keyHash =
+        0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae;
 
-    struct RequestStatus {
-        uint256 paid; 
-        bool fulfilled; 
-        uint256[] randomWords;
+    uint32 public callbackGasLimit = 200000;
+    uint16 public requestConfirmations = 3;
+    uint32 public numWords = 1;
+
+    address[] public participants;
+    mapping(uint256 => address) private s_requests;
+    mapping(address => uint256) private s_results;
+
+    event LotteryEntered(address indexed player);
+    event WinnerRequested(uint256 indexed requestId);
+    event WinnerSelected(uint256 indexed requestId, address indexed winner, uint256 prize);
+
+ 
+
+    uint256 public entryFee = 0.01 ether;
+
+    constructor(uint256 subscriptionId) VRFConsumerBaseV2Plus(vrfCoordinator) {
+        s_subscriptionId = subscriptionId;
     }
-    mapping(uint256 => RequestStatus)
-        public s_requests; /* requestId --> requestStatus */
 
-    // past requests Id.
-    uint256[] public requestIds;
-    uint256 public lastRequestId;
+    function enterLottery() public payable {
+        require(msg.value == entryFee, "Incorrect entry fee");
+        participants.push(msg.sender);
+        emit LotteryEntered(msg.sender);
+    }
 
+    function requestRandomWinner() public  returns (uint256 requestId) {
+        require(participants.length > 0, "No participants");
 
-    uint32 callbackGasLimit = 100000;
-
-    // The default is 3, but you can set this higher.
-    uint16 requestConfirmations = 3;
-
-    uint32 numWords = 1;
-
-    // Address LINK - hardcoded for Sepolia
-    address linkAddress = 0x779877A7B0D9E8603169DdbD7836e478b4624789;
-
-    // address WRAPPER - hardcoded for Sepolia
-    address wrapperAddress = 0xab18414CD93297B0d12ac29E63Ca20f515b3DB46;
-
-    constructor()
-        ConfirmedOwner(msg.sender)
-        VRFV2WrapperConsumerBase(linkAddress, wrapperAddress)
-    {}
-
-    function requestRandomWords()
-        external
-        onlyOwner
-        returns (uint256 requestId)
-    {
-        requestId = requestRandomness(
-            callbackGasLimit,
-            requestConfirmations,
-            numWords
+        requestId = s_vrfCoordinator.requestRandomWords(
+            VRFV2PlusClient.RandomWordsRequest({
+                keyHash: s_keyHash,
+                subId: s_subscriptionId,
+                requestConfirmations: requestConfirmations,
+                callbackGasLimit: callbackGasLimit,
+                numWords: numWords,
+                extraArgs: VRFV2PlusClient._argsToBytes(
+                    VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
+                )
+            })
         );
-        s_requests[requestId] = RequestStatus({
-            paid: VRF_V2_WRAPPER.calculateRequestPrice(callbackGasLimit),
-            randomWords: new uint256[](0),
-            fulfilled: false
-        });
-        requestIds.push(requestId);
-        lastRequestId = requestId;
-        emit RequestSent(requestId, numWords);
-        return requestId;
+
+        s_requests[requestId] = msg.sender;
+        emit WinnerRequested(requestId);
     }
 
     function fulfillRandomWords(
-        uint256 _requestId,
-        uint256[] memory _randomWords
+        uint256 requestId,
+        uint256[] calldata randomWords
     ) internal override {
-        require(s_requests[_requestId].paid > 0, "request not found");
-        s_requests[_requestId].fulfilled = true;
-        s_requests[_requestId].randomWords = _randomWords;
-        emit RequestFulfilled(
-            _requestId,
-            _randomWords,
-            s_requests[_requestId].paid
-        );
+        require(participants.length > 0, "No participants");
+        
+        lastRandomNumber = randomWords[0];
+        uint256 winnerIndex = randomWords[0] % participants.length;
+        lastWinner = participants[winnerIndex];
+
+        uint256 prize = address(this).balance;
+        delete participants;
+
+        payable(lastWinner).transfer(prize);
+        emit WinnerSelected(requestId, lastWinner, prize);
     }
 
-    function getRequestStatus(
-        uint256 _requestId
-    )
-        external
-        view
-        returns (uint256 paid, bool fulfilled, uint256[] memory randomWords)
-    {
-        require(s_requests[_requestId].paid > 0, "request not found");
-        RequestStatus memory request = s_requests[_requestId];
-        return (request.paid, request.fulfilled, request.randomWords);
+    function getParticipants() public view returns (address[] memory) {
+        return participants;
     }
 
-    /**
-     * Allow withdraw of Link tokens from the contract
-     */
-    function withdrawLink() public onlyOwner {
-        LinkTokenInterface link = LinkTokenInterface(linkAddress);
-        require(
-            link.transfer(msg.sender, link.balanceOf(address(this))),
-            "Unable to transfer"
-        );
+    function getWinner() public view returns (address) {
+    return lastWinner;
     }
+
+    function getRandomNumber() public view returns (uint256) {
+    return lastRandomNumber;
+    }
+
+    receive() external payable {}
 }
