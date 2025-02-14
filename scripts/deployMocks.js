@@ -1,8 +1,8 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-  const BASE_FEE = ethers.parseEther("0.25"); // Cost per request
-  const GAS_PRICE_LINK = 1e9; // LINK per gas
+  const BASE_FEE = 1
+  const GAS_PRICE_LINK = 1
 
   console.log("Deploying VRFCoordinatorV2Mock...");
   const VRFCoordinatorV2Mock = await ethers.getContractFactory("VRFCoordinatorV2Mock");

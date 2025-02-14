@@ -10,7 +10,7 @@ describe("LotteryVRF", function () {
  
     // Deploy VRFCoordinatorV2Mock
     const VRFCoordinatorV2Mock = await ethers.getContractFactory("VRFCoordinatorV2Mock");
-    const vrfMock = await VRFCoordinatorV2Mock.deploy(0, 0); 
+    const vrfMock = await VRFCoordinatorV2Mock.deploy(1, 1); 
     await vrfMock.waitForDeployment();
     const tx = await vrfMock.createSubscription();
     const receipt = await tx.wait();
