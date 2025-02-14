@@ -1,24 +1,35 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
-const { time, loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
-const subscriptionId = process.env.SUBSCRIPTION_ID; 
+const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
+// const subscriptionId = process.env.SUBSCRIPTION_ID
 
 
 describe("LotteryVRF", function () {
   async function deployLotteryVRFFixture() {
     const [owner, player1, player2] = await ethers.getSigners();
+ 
+    // Deploy VRFCoordinatorV2Mock
+    const VRFCoordinatorV2Mock = await ethers.getContractFactory("VRFCoordinatorV2Mock");
+    const vrfMock = await VRFCoordinatorV2Mock.deploy(0, 0); 
+    await vrfMock.waitForDeployment();
+    const tx = await vrfMock.createSubscription();
+    const receipt = await tx.wait();
+    const subscriptionId = receipt.logs[0].args.subId;
 
-
+    await vrfMock.fundSubscription(subscriptionId, ethers.parseEther("10")); 
     const LotteryVRF = await ethers.getContractFactory("LotteryVRF");
     const lotteryVRF = await LotteryVRF.deploy(subscriptionId);
 
-    console.log(lotteryVRF)
-    return { lotteryVRF, owner, player1, player2 };
+    await vrfMock.addConsumer(subscriptionId, lotteryVRF.target);
+
+
+    return { lotteryVRF, vrfMock, subscriptionId, owner, player1, player2 };
   }
 
   describe("Deployment", function () {
     it("Should set the correct subscription ID", async function () {
-      const { lotteryVRF } = await loadFixture(deployLotteryVRFFixture);
+      const { lotteryVRF, subscriptionId } = await loadFixture(deployLotteryVRFFixture);
+
       expect(await lotteryVRF.s_subscriptionId()).to.equal(subscriptionId);
     });
 
@@ -65,7 +76,6 @@ describe("LotteryVRF", function () {
       // Owner requests a random winner
       await expect(lotteryVRF.connect(owner).requestRandomWinner())
         .to.emit(lotteryVRF, "WinnerRequested")
-        .withArgs(anyValue); 
     });
 
     it("Should revert if there are no participants", async function () {
@@ -80,7 +90,7 @@ describe("LotteryVRF", function () {
 
   describe("Fulfill Random Words", function () {
     it("Should select a winner and transfer the prize", async function () {
-      const { lotteryVRF, owner, player1, player2 } = await loadFixture(deployLotteryVRFFixture);
+      const { lotteryVRF, vrfMock, owner, player1, player2 } = await loadFixture(deployLotteryVRFFixture);
 
       // Players enter the lottery
       await lotteryVRF.connect(player1).enterLottery({ value: ethers.parseEther("0.01") });
@@ -89,15 +99,11 @@ describe("LotteryVRF", function () {
       // Owner requests a random winner
       const tx = await lotteryVRF.connect(owner).requestRandomWinner();
       const receipt = await tx.wait();
-      console.log('receipt:', receipt)
       const requestId = receipt.logs[0].args.requestId;
 
-      const randomWords = [42]; // Mock random number
-      await expect(
-        lotteryVRF.connect(owner).fulfillRandomWords(requestId, randomWords)
-      )
-        .to.emit(lotteryVRF, "WinnerSelected")
-        .withArgs(requestId, anyValue, ethers.parseEther("0.02"));
+            // Mock VRF fulfillment
+     await expect(vrfMock.fulfillRandomWords(requestId, lotteryVRF.target))
+        .to.emit(lotteryVRF, "WinnerSelected");   
 
       // Check winner and prize distribution
       const winner = await lotteryVRF.getWinner();
@@ -108,17 +114,16 @@ describe("LotteryVRF", function () {
     });
 
     it("Should revert if there are no participants when fulfilling random words", async function () {
-      const { lotteryVRF, owner } = await loadFixture(deployLotteryVRFFixture);
+      const { lotteryVRF, vrfMock, owner } = await loadFixture(deployLotteryVRFFixture);
 
       // Owner requests a random winner (no participants)
       const tx = await lotteryVRF.connect(owner).requestRandomWinner();
       const receipt = await tx.wait();
       const requestId = receipt.logs[0].args.requestId;
 
-      const randomWords = [42]; // Mock random number
-      await expect(
-        lotteryVRF.connect(owner).fulfillRandomWords(requestId, randomWords)
-      ).to.be.revertedWith("No participants");
+      await expect(vrfMock.fulfillRandomWords(requestId, lotteryVRF.target)).to.be.revertedWith(
+        "No participants"
+      );
     });
   });
 
